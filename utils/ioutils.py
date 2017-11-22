@@ -1,20 +1,14 @@
 
 # coding: utf-8
 
-
 # Deep Learning
 # =============
-# 
-# Assignment 1
-# ------------
-# 
-# The objective of this assignment is to learn about simple data curation practices, and familiarize you with some of the data we'll be reusing later.
-# 
-# This notebook uses the [notMNIST](http://yaroslavvb.blogspot.com/2011/09/notmnist-dataset.html) dataset to be used with python experiments. This dataset is designed to look like the classic [MNIST](http://yann.lecun.com/exdb/mnist/) dataset, while looking a little more like real data: it's a harder task, and the data is a lot less 'clean' than MNIST.
+# based on Udacity course UD730 https://classroom.udacity.com/courses/ud730, further modifications by vykozlov
+#
+# ---- 
+# Helper Functions to prepare the data
+# ----
 
-
-# These are all the modules we'll be using later. Make sure you can import them
-# before proceeding further.
 from __future__ import print_function
 import matplotlib.pyplot as plt
 import numpy as np
@@ -25,6 +19,7 @@ from scipy import ndimage
 from sklearn.linear_model import LogisticRegression
 from six.moves.urllib.request import urlretrieve
 from six.moves import cPickle as pickle
+import tensorflow as tf
 
 import data_cfg as cfg
 
@@ -146,14 +141,9 @@ def maybe_pickle(data_folders, min_num_images_per_class, force=False):
   
   return dataset_names
 
-# ---
-# Problem 2
-# ---------
-# 
-# Let's verify that the data still looks good. Displaying a sample of the labels and images from the ndarray. Hint: you can use matplotlib.pyplot.
-# 
-# ---
-
+#
+# One can verify that the data still looks good. Displaying a sample of the labels and images from the ndarray. Hint: you can use matplotlib.pyplot.
+#
 def verify_img(pickle_file):
     #pickle_file = train_datasets[1]  # index 0 should be all As, 1 = all Bs, etc.
     with open(pickle_file, 'rb') as f:
@@ -162,8 +152,6 @@ def verify_img(pickle_file):
         sample_image = letter_set[sample_idx, :, :]  # extract a 2D slice
         plt.figure()
         plt.imshow(sample_image)  # display it
-
-
 
 # Merge and prune the training data as needed. Depending on your computer setup, you might not be able to fit it all in memory, and you can tune `train_size` as needed. The labels will be stored into a separate array of integers 0 through 9.
 # Also create a validation dataset for hyperparameter tuning.
@@ -184,8 +172,8 @@ def merge_datasets(pickle_files, train_size, valid_size=0):
     
   start_v, start_t = 0, 0
   end_v, end_t = vsize_per_class, tsize_per_class
-  end_l = vsize_per_class+tsize_per_class
-  for label, pickle_file in enumerate(pickle_files):       
+  end_l = vsize_per_class + tsize_per_class
+  for label, pickle_file in enumerate(pickle_files):   
     try:
       with open(pickle_file, 'rb') as f:
         letter_set = pickle.load(f)
@@ -210,24 +198,16 @@ def merge_datasets(pickle_files, train_size, valid_size=0):
   return valid_dataset, valid_labels, train_dataset, train_labels
             
 
-# Next, we'll randomize the data. It's important to have the labels well shuffled for the training and test distributions to match.
-
+# Function to randomize the data. It's important to have the labels well shuffled for the training and test distributions to match.
 def randomize(dataset, labels):
   permutation = np.random.permutation(labels.shape[0])
   shuffled_dataset = dataset[permutation,:,:]
   shuffled_labels = labels[permutation]
   return shuffled_dataset, shuffled_labels
-
-#.train_dataset, train_labels = randomize(train_dataset, train_labels)
-#.test_dataset, test_labels = randomize(test_dataset, test_labels)
-#.valid_dataset, valid_labels = randomize(valid_dataset, valid_labels)
-
+  
 # ---
-# Problem 4
-# ---------
 # Convince yourself that the data is still good after shuffling!
 # ---
-
 def verify_img2(dataset, labels, sample_idx):
     sample_image = dataset[sample_idx, :, :]  # extract a 2D slice
     print("Idx: ", sample_idx, ", Label: ",labels[sample_idx])
@@ -237,42 +217,8 @@ def verify_img2(dataset, labels, sample_idx):
 #.idx = np.random.randint(len(train_dataset))  # pick a random image index
 #.verify_img2(train_dataset,train_labels,idx)
 
-# ---
-# Problem 5
-# ---------
-# 
-# By construction, this dataset might contain a lot of overlapping samples, including training data that's also contained in the validation and test set! Overlap between training and test can skew the results if you expect to use your model in an environment where there is never an overlap, but are actually ok if you expect to see training samples recur when you use it.
-# Measure how much overlap there is between training, validation and test samples.
-# 
-# Optional questions:
-# - What about near duplicates between datasets? (images that are almost identical)
-# - Create a sanitized validation and test set, and compare your accuracy on those in subsequent assignments.
-# ---
 
-#.train_dataset.flags.writeable=False
-#.test_dataset.flags.writeable=False
-#.dup_table={}
-#.verify_img2(train_dataset,train_labels,820)
-#.verify_img2(train_dataset,train_labels,967)
-
-#.train_counter = 0
-#.for idx,img in enumerate(train_dataset):
-#.    h = hash(bytes(img.data))
-#.    if h in dup_table and (train_dataset[dup_table[h]].data == img.data):
-#.       print('Duplicate image: %d matches %d' % (idx, dup_table[h]))
-#.       train_counter += 1
-#.    dup_table[h] = idx
-#.test_counter = 0    
-#.for idx,img in enumerate(test_dataset):
-#.    h = hash(bytes(img.data))
-#.    if h in dup_table and (train_dataset[dup_table[h]].data == img.data):
-#.        print(test_counter,': Test image %d is in the training set (%d)' % (idx, dup_table[h]))
-#.        test_counter += 1
-#.        
-#.print("Train duplicates: ", train_counter, "Test duplicates with train: ", test_counter)
-        
-
-# Finally, let's save the data for later reuse:
+# Function to store the datasets for later reuse:
 def store_datasets(path, pickle_file, dataset_dict):
     pickle_file = os.path.join(path, pickle_file)
 
@@ -296,10 +242,8 @@ def store_datasets(path, pickle_file, dataset_dict):
     print('Compressed pickle size:', statinfo.st_size)
 
 
-
 # Different methods, comparison on what they give and how fast they are.
 # Taken from https://discussions.udacity.com/t/assignment-1-problem-5/45657/21
-
 def fast_overlaps_num_set_and_hash(images1, images2):
     images1.flags.writeable=False
     images2.flags.writeable=False
@@ -368,22 +312,51 @@ def faster_overlaps_hashlib_and_numpy(path, pickle_file):
     print("test  -> valid overlap: %d samples" % test_in_valid.sum())
     return test_dataset_clean,test_labels_clean
 
+def read_from_pickle(picklefile, idata, ilabels):
+	with open(picklefile, 'rb') as f:
+		save = pickle.load(f)
+		dataset = save[idata]
+		labels = save[ilabels]
+		del save  # hint to help gc free up memory
+	return dataset, labels
 
-# ---
-# Problem 6
-# ---------
+# Reformat into a shape that's more adapted to the models we're going to train:
+# - data as a flat matrix,
+# - labels as float 1-hot encodings.
+def reformat(dataset, labels):
+	dataset = dataset.reshape((-1, cfg.image_size, cfg.image_size, cfg.num_channels)).astype(np.float32)
+	# Map 1 to [0.0, 1.0, 0.0 ...], 2 to [0.0, 0.0, 1.0 ...]
+	labels = (np.arange(cfg.num_labels) == labels[:,None]).astype(np.float32)
+	return dataset, labels	
+	
+# following is 'borrowed' from https://github.com/tensorflow/models/blob/master/tutorials/image/cifar10_estimator/
+# and https://github.com/chiphuyen/stanford-tensorflow-tutorials/blob/master/examples/09_tfrecord_example.py
+def _bytes_feature(value):
+	return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))	#(value=[str(value)])
+	
+def _int64_feature(value):
+	return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+	
+def convert_to_tfrecord(input_file, idata, ilabels, output_file):
+	"""Converts a file to TFRecords."""
+	print('Generating %s' % output_file)
+	with tf.python_io.TFRecordWriter(output_file) as record_writer:
+		data, labels = read_from_pickle(input_file, idata, ilabels)
+		num_entries_in_batch = len(labels)
+		print(num_entries_in_batch)
+		print(cfg.line_sep)		
+		for i in range(num_entries_in_batch):
+			example = tf.train.Example(features=tf.train.Features(
+				feature={
+					'image': _bytes_feature(data[i].tobytes()),   #data[i].tobytes()
+					'label': _int64_feature(labels[i])
+				}))
+			record_writer.write(example.SerializeToString())
+
 # 
 # Let's get an idea of what an off-the-shelf classifier can give you on this data. It's always good to check that there is something to learn, and that it's a problem that is not so trivial that a canned solution solves it.
+# We can train a simple model on this data using 50, 100, 1000 and 5000 training samples. Hint: you can use the LogisticRegression model from sklearn.linear_model.
 # 
-# Train a simple model on this data using 50, 100, 1000 and 5000 training samples. Hint: you can use the LogisticRegression model from sklearn.linear_model.
-# 
-# Optional question: train an off-the-shelf model on all the data!
-# 
-# ---
-
-# In[29]:
-
-
 import pandas as pd
 
 n_samples = 200000
@@ -418,13 +391,3 @@ def model_fit(mymodel,trainset,trainlabels,testset,testlabels,testsetclean,testl
 #.from sklearn import linear_model
 #.linearmodel = linear_model.LinearRegression()
 #.model_fit(linearmodel,train_dataset2d[0:n_samples],train_labels[0:n_samples],test_dataset2d,test_labels,test_dataset2d_clean,test_labels_clean)
-
-
-# Reformat into a shape that's more adapted to the models we're going to train:
-# - data as a flat matrix,
-# - labels as float 1-hot encodings.
-def reformat(dataset, labels):
-	dataset = dataset.reshape((-1, cfg.image_size, cfg.image_size, cfg.num_channels)).astype(np.float32)
-	# Map 1 to [0.0, 1.0, 0.0 ...], 2 to [0.0, 0.0, 1.0 ...]
-	labels = (np.arange(cfg.num_labels) == labels[:,None]).astype(np.float32)
-	return dataset, labels

@@ -2,9 +2,12 @@
 
 # Deep Learning
 # =============
+# based on Udacity course UD730 https://classroom.udacity.com/courses/ud730, further modifications by vykozlov
+# 
+# ---- 
+# Main python script to call
+# ---- 
 
-# These are all the modules we'll be using later. Make sure you can import them
-# before proceeding further.
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -24,13 +27,14 @@ import utils.netutils as netutils
 FLAGS = None
 
 # ---
-# Let's build a small network with two convolutional layers, followed by one fully connected layer. Convolutional networks are more expensive computationally, so we'll limit its depth and number of fully connected nodes.
-# 
+# Let's build a small network with convolutional layers. 
+# This program uses the [notMNIST](http://yaroslavvb.blogspot.com/2011/09/notmnist-dataset.html) dataset to be used with python experiments. This dataset is designed to look like the classic [MNIST](http://yann.lecun.com/exdb/mnist/) dataset, while looking a little more like real data: it's a harder task, and the data is a lot less 'clean' than MNIST.
 # ---
+
 
 def main(_):
 	
-	# First reload the data we generated in `1_notmnist.ipynb`.
+	# First download data, extract, and create pickle files per image, if do not exist.
 	train_filename = dlutils.maybe_download(cfg.data_root, 'notMNIST_large.tar.gz', 247336696)
 	test_filename = dlutils.maybe_download(cfg.data_root, 'notMNIST_small.tar.gz', 8458043)
 
@@ -40,7 +44,7 @@ def main(_):
 	train_datasets = dlutils.maybe_pickle(train_folders, 45000)
 	test_datasets = dlutils.maybe_pickle(test_folders, 1800)
 
-	train_size = 200000 #200000
+	train_size = 200000
 	valid_size = 10000
 	test_size = 10000
 	
@@ -55,14 +59,14 @@ def main(_):
 	cfg.test_dataset, cfg.test_labels = dlutils.randomize(cfg.test_dataset, cfg.test_labels)
 	cfg.valid_dataset, cfg.valid_labels = dlutils.randomize(cfg.valid_dataset, cfg.valid_labels)
 	
-	# Finally, let's save the data for later reuse, if doesn't yet exists
+	# Finally, let's save the data for later reuse, if don't yet exists
 	force = cfg.force_rebuild
 	if args["force_rebuild"] > 0:
 		force = args["force_rebuild"]
 		
 	pickle_file = "notMNIST.pickle"
 	if os.path.exists(pickle_file) and not force:
-		# You may override by setting force=True.
+		# One may override by setting force=True.
 		print('%s already present - Skipping saving pickle file' % pickle_file)
 	else:
 		datasets_dict = {'x_train' : cfg.train_dataset, 'y_train': cfg.train_labels,
@@ -81,51 +85,36 @@ def main(_):
 		test_dataset_clean,test_labels_clean = dlutils.faster_overlaps_hashlib_and_numpy(cfg.data_root, pickle_cleanfile)
 		t2 = time.time()
 		print("Time: %0.2fs" % (t2 - t1))
-
-	with tf.device('/cpu:0'):
-		with open(pickle_cleanfile, 'rb') as f:
-			save = pickle.load(f)
-			train_dataset = save['train_dataset']
-			train_labels = save['train_labels']
-			valid_dataset = save['valid_dataset']
-			valid_labels = save['valid_labels']
-			test_dataset = save['test_dataset']
-			test_labels = save['test_labels']
-			del save  # hint to help gc free up memory
-			print('Training set', train_dataset.shape, train_labels.shape)
-			print('Validation set', valid_dataset.shape, valid_labels.shape)
-			print('Test set', test_dataset.shape, test_labels.shape)
-
+		print(cfg.line_sep)
+		
+		#create corresponding .tfrecord files per set. We can skip this, as the files are not used later on!
+		dlutils.convert_to_tfrecord(pickle_cleanfile, "train_dataset", "train_labels", "train.tfrecord")
+		dlutils.convert_to_tfrecord(pickle_cleanfile, "valid_dataset", "valid_labels", "valid.tfrecord")
+		dlutils.convert_to_tfrecord(pickle_cleanfile, "test_dataset", "test_labels", "test.tfrecord")
+		
+	with tf.device('/cpu:0'):		
+		train_dataset, train_labels = dlutils.read_from_pickle(pickle_cleanfile, "train_dataset", "train_labels")
+		valid_dataset, valid_labels = dlutils.read_from_pickle(pickle_cleanfile, "valid_dataset", "valid_labels")
+		test_dataset, test_labels = dlutils.read_from_pickle(pickle_cleanfile, "test_dataset", "test_labels")
+		print(cfg.line_sep)		
+		print('Training set', train_dataset.shape, train_labels.shape)
+		print('Validation set', valid_dataset.shape, valid_labels.shape)
+		print('Test set', test_dataset.shape, test_labels.shape)
+		print(cfg.line_sep)
+	
 		train_dataset, train_labels = dlutils.reformat(train_dataset, train_labels)
 		valid_dataset, valid_labels = dlutils.reformat(valid_dataset, valid_labels)
 		test_dataset, test_labels = dlutils.reformat(test_dataset, test_labels)
 		print('Training set', train_dataset.shape, train_labels.shape)
 		print('Validation set', valid_dataset.shape, valid_labels.shape)
-		print('Test set', test_dataset.shape, test_labels.shape)	
-		
-	mygraph = tf.Graph()
-	with mygraph.as_default():
+		print('Test set', test_dataset.shape, test_labels.shape)
+		print(cfg.line_sep)		
 
-		def mydnn(dataset):
-			num_hidden = 1024
-			l1conv = netutils.cnn_layer(dataset, [5, 5, cfg.num_channels, 32], [32], 'conv1') # 20->50 # 32->64
-			l1pool = netutils.max_pool_2x2(l1conv)
-			lnconv = netutils.cnn_layer(l1pool, [3, 3, 32, 64], [64], 'conv2')
-			lnpool = netutils.max_pool_2x2(lnconv)
-			#lnconv = cnn_layer(l2conv, [patch_size//4, patch_size//4, 4*depth, 16*depth], [16*depth], 'conv3')
-			#l2drop = drop(l2,'drop_layer2')
-			shape = lnpool.get_shape().as_list()
-			print(shape)
-			lnreshaped = tf.reshape(lnpool, [-1, shape[1] * shape[2] * shape[3]]) #shape[0]
-			lndim = shape[1] * shape[2] * shape[3]
-			l3 = netutils.fc_layer(lnreshaped, lndim, num_hidden, 'layer3') #orig: image_size // 4 * image_size // 4 * depth
-			l3drop = netutils.drop(l3,'drop_layer', keep_prob)
-			#l4 = nn_layer(l3drop, 512, 128, 'layer4', act=tf.nn.relu)
-			#l5 = nn_layer(l4, 128, 256, 'layer5', act=tf.nn.relu)
-			lout = netutils.fc_layer(l3drop, num_hidden, cfg.num_labels, 'layer4', act=tf.identity)
-			return lout
-          
-    
+
+	from nets.lenet import LeNet
+		
+	mygraph = tf.Graph()	
+	with mygraph.as_default():
 		# Input data. For the training data, we use a placeholder that will be fed
 		# at run time with a training minibatch.
 		# Input placeholders
@@ -133,11 +122,11 @@ def main(_):
 			x_dataset = tf.placeholder(tf.float32, shape=(None, cfg.image_size, cfg.image_size, cfg.num_channels))  # batch_size, image_size*image_size
 			y_labels = tf.placeholder(tf.float32, shape=(None, cfg.num_labels))     # batch_size, 10
 
+		keep_prob = tf.placeholder(tf.float32)			
+		model = LeNet(x_dataset,keep_prob,cfg.num_labels)
+		logits_out = model.LayerOut
 
-		keep_prob = tf.placeholder(tf.float32)
-		logits_out = mydnn(x_dataset)
-
-		#### --- PROBLEM 1 (L2 Regularization, see above) --- ####
+		#### --- L2 Regularization --- ####
 		vars   = tf.trainable_variables()
 		print(vars)
 		lossL2 = tf.add_n([ tf.nn.l2_loss(v) for v in vars
@@ -157,7 +146,7 @@ def main(_):
 				loss = tf.reduce_mean(diff + lossL2)
 		tf.summary.scalar('loss', loss)
 
-		#### --- PROBLEM 4 (Learning rate decay, see below) --- ####
+		#### --- Learning rate decay, see below --- ####
 		with tf.name_scope('train'):
 			# Optimizer. loss = loss function above
 			# global_step is inspired by "Problem 4" below
@@ -184,45 +173,47 @@ def main(_):
 		summaries = tf.summary.merge_all()
 
 
-	# Run TF seesion:
-
-	#default number of steps
-	num_steps = cfg.num_steps
+	#if number of epochs is specified, force this number, otherwise -> early stopping
+	max_epochs = -1
+	if args["max_epochs"] > 0:
+		max_epochs = args["max_epochs"]
 	
-	if args["num_steps"] > 0:
-		num_steps = args["num_steps"]
-		
-	print("-------------------------")	
-	print("Number of steps: ", num_steps)
-	print("-------------------------")
+	print(cfg.line_sep)	
+	print("Max number of epochs: ", max_epochs)
+	print(cfg.line_sep)	
 
-
+	### Optimization ###
 	config = tf.ConfigProto()
 	jit_level = 0
 	if FLAGS.xla:
 		# Turns on XLA JIT compilation.
 		jit_level = tf.OptimizerOptions.ON_1
+		print(cfg.line_sep)
 		print("executing with XLA: ", jit_level)
-		print("-------------------------")
+		print(cfg.line_sep)
 	jit_level = tf.OptimizerOptions.ON_1
 	config.graph_options.optimizer_options.global_jit_level = jit_level # effect?
 	config.intra_op_parallelism_threads = 2  # effect?
 	config.inter_op_parallelism_threads = 2  # effect?
 
+	# Run TF seesion:
 	session = tf.Session(config=config)
 	with tf.Session(graph=mygraph) as session:   
 		# Clean directory for TensorBoard graphs
 		import shutil
-		if tf.gfile.Exists(cfg.log_dir):
-			tf.gfile.DeleteRecursively(cfg.log_dir)
-			# 'hack' to clean TensorBoard from older runs
-			shutil.rmtree('log_dir', ignore_errors=True)
-		tf.gfile.MakeDirs(cfg.log_dir)
-		
 		with tf.device('/cpu:0'):
+			if tf.gfile.Exists(cfg.log_dir):
+				tf.gfile.DeleteRecursively(cfg.log_dir)
+				# 'hack' to clean TensorBoard from older runs
+				shutil.rmtree('log_dir', ignore_errors=True)
+			tf.gfile.MakeDirs(cfg.log_dir)
+		
+		
 			train_writer = tf.summary.FileWriter(cfg.log_dir + '/train', session.graph)
 			valid_writer = tf.summary.FileWriter(cfg.log_dir + '/valid')
 			test_writer = tf.summary.FileWriter(cfg.log_dir + '/test')
+			
+			train = netutils.Dataset(train_dataset, train_labels)
 
 		# let's measure timing
 		t0 = time.time()
@@ -235,10 +226,8 @@ def main(_):
 		tf.global_variables_initializer().run()
 		print("Initialized")
 
-		train = netutils.Dataset(train_dataset, train_labels)
-
 		#for step in range(num_steps):
-		while pcount < patience :   #implement 'early stopping' with patience parameter
+		while cfg.early_stopping:   #implement 'early stopping' with patience parameter. ea
 			batch_data, batch_labels = train.next_batch(cfg.batch_size)
 
 			# Prepare a dictionary telling the session where to feed the minibatch.
@@ -258,7 +247,7 @@ def main(_):
 					[loss, summaries, accuracy],feed_dict={x_dataset : valid_dataset, y_labels : valid_labels, keep_prob : 1})
 				valid_writer.add_summary(valid_summary, step)
 				
-				#'early stopping', let <4% variation
+				#'early stopping', let a little variation
 				if valid_loss/prevloss > 0.995 and valid_loss/prevloss < 1.05:
 					pcount += 1
 				prevloss = valid_loss
@@ -271,19 +260,26 @@ def main(_):
 				print("Minibatch accuracy (method 3): %.1f%%" % (100.*accu))				
 				print("Validation: loss, accuracy: %.3f, %.1f%%" % (valid_loss, 100.*valid_accu))
 				
+				if pcount >= patience and max_epochs < 0:
+					cfg.early_stopping = False
+				elif current_epoch == max_epochs:
+					cfg.early_stopping = False
+					
+				
 			if (step % 10 == 0):
 				train_writer.add_summary(summary, step)
-
+					
 			step += 1
 				  
-		print("-------------------------")
+		print(cfg.line_sep)
 		print("steps completed: %d" % step)
-		print("-------------------------")
+		print(cfg.line_sep)
 		
 		if (cfg.debug):
 			vars   = tf.trainable_variables()
 			for v in vars:
 				print(v.name, ": ", v.eval())
+				
 		test_loss, test_summary, test_accu = session.run(
 			[loss, summaries, accuracy],feed_dict={x_dataset : test_dataset, y_labels : test_labels, keep_prob : 1})
 		print("\nTest: loss, accuracy (method 3): %.3f, %.1f%%\n" % (test_loss, 100.*test_accu))
@@ -302,8 +298,8 @@ def main(_):
     
 if __name__ == '__main__':
 	parser = argparse.ArgumentParser()
-	parser.add_argument("--num-steps", type=int, default=cfg.num_steps,
-		help="(optional) number of steps to train (not epochs!)")
+	parser.add_argument("--max-epochs", type=int, default=-1,
+		help="(optional) number of epochs to train")
 	parser.add_argument("--force-rebuild", type=bool, default=cfg.force_rebuild,
 		help="(optional) force summary pickle files rebuild")
 	parser.add_argument('--xla', type=bool, default=True, help='Turn xla via JIT On. OFF = --xla=\'\'')
@@ -311,18 +307,3 @@ if __name__ == '__main__':
 	FLAGS, unparsed = parser.parse_known_args()
 	tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
 
-# ---
-# Problem 1
-# ---------
-# 
-# The convolutional model above uses convolutions with stride 2 to reduce the dimensionality. Replace the strides by a max pooling operation (`nn.max_pool()`) of stride 2 and kernel size 2.
-# 
-# ---
-
-# ---
-# Problem 2
-# ---------
-# 
-# Try to get the best performance you can using a convolutional net. Look for example at the classic [LeNet5](http://yann.lecun.com/exdb/lenet/) architecture, adding Dropout, and/or adding learning rate decay.
-# 
-# ---

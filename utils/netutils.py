@@ -1,3 +1,11 @@
+# Deep Learning
+# =============
+# based on Udacity course UD730 https://classroom.udacity.com/courses/ud730, further modifications by vykozlov
+#  
+# ---- 
+# Helper Functions to build a neural network
+# ----
+
 import numpy as np
 import tensorflow as tf
 import data_cfg as cfg
@@ -40,7 +48,7 @@ def max_pool_2x2(dataset):
 	"""max_pool_2x2 downsamples a feature map by 2X."""
 	return tf.nn.max_pool(dataset, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')  #1,2,2,1
 
-#### --- (Dropout, see below) --- ####
+#### --- Dropout --- ####
 # Dropout - controls the complexity of the model, prevents co-adaptation of features.
 # keep_prob - a place holder introduced below, the probability that each element is kept.
 def drop(dataset,drop_layer, keep_prob=1.0):
