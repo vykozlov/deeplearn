@@ -1,7 +1,7 @@
 # deeplearn
 Practicing Deep Learning based on the corresponding Udacity course UD730 (https://classroom.udacity.com/courses/ud730)
 
-Code is structured as follows:
+### Code is structured as follows:
 
 `convolutions.py` : main 'executable'
 
@@ -13,7 +13,7 @@ Code is structured as follows:
 
 `nets/` : to put specific neural network structures here. Currently implemented: LeNet (see below)
 
-**Currently implemented:**
+### Currently implemented:
 * use Xavier initializer for weights (http://machinelearning.wustl.edu/mlpapers/papers/AISTATS2010_GlorotB10 )
 * Optimization attempts with `tf.device('/cpu:0')` 
 * use random batches but not repeat data within one epoch (based on the example taken from https://stackoverflow.com/questions/40994583/how-to-implement-tensorflows-next-batch-for-own-data )
